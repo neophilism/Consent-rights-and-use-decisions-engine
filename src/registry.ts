@@ -1,0 +1,271 @@
+import { scoped } from "@accountability/evidence/database";
+import type { Database, UnitOfWork } from "@accountability/evidence/database";
+import { invariant, digest, requireScope, canonical } from "./contracts.ts";
+import type { Context, Ref, Json, Scope } from "./contracts.ts";
+import {
+  assertRef,
+  assertDigest,
+  createRightsGrant,
+  createConsent,
+  withdrawPermission,
+  decideUse,
+} from "./index.ts";
+import type {
+  RightsGrant,
+  Consent,
+  UseResource,
+  UseRequest,
+  UseDecision,
+} from "./index.ts";
+export type RegistryPolicy = Scope & {
+  managerIds: readonly string[];
+  participantActors: Readonly<Record<string, string>>;
+};
+const key = (kind: string, id: string) => digest({ kind, id });
+const json = (value: unknown): Json => JSON.parse(canonical(value)) as Json;
+export class PermissionRegistry {
+  readonly #db: Database;
+  readonly #policy: RegistryPolicy;
+  constructor(db: Database, policy: RegistryPolicy) {
+    this.#db = db;
+    this.#policy = structuredClone(policy);
+  }
+  #manager(c: Context) {
+    requireScope(c, this.#policy);
+    invariant(
+      c.actor.kind === "human" &&
+        c.actor.roles.includes("owner") &&
+        this.#policy.managerIds.includes(c.actor.id),
+      "manager_required",
+      "An authenticated listed permission manager is required",
+    );
+  }
+  #participant(c: Context, subject: string) {
+    requireScope(c, this.#policy);
+    return (
+      c.actor.kind === "human" &&
+      c.actor.roles.includes("participant") &&
+      Object.hasOwn(this.#policy.participantActors, subject) &&
+      this.#policy.participantActors[subject] === c.actor.id
+    );
+  }
+  async registerResource(
+    c: Context,
+    resource: UseResource,
+    expectedRevision: number,
+  ): Promise<number> {
+    c = structuredClone(c);
+    resource = structuredClone(resource);
+    this.#manager(c);
+    assertRef(c, resource.ref);
+    assertDigest(resource.digest);
+    invariant(
+      Array.isArray(resource.requiredConsentSubjects) &&
+        new Set(resource.requiredConsentSubjects).size ===
+          resource.requiredConsentSubjects.length,
+      "invalid_resource",
+      "Consent subjects must be explicit and unique",
+    );
+    return scoped(this.#db, c, async (tx) => {
+      const old = await tx.get<UseResource>(
+        "permission-resource",
+        digest(resource.ref),
+      );
+      if (old)
+        invariant(
+          old.value.digest === resource.digest,
+          "resource_changed",
+          "Exact resource edition cannot change bytes",
+        );
+      const rootKey = key(resource.ref.kind, resource.ref.id);
+      const root = await tx.get<{ subjects: string[] }>(
+        "permission-subjects",
+        rootKey,
+      );
+      invariant(
+        !root ||
+          root.value.subjects.every((x) =>
+            resource.requiredConsentSubjects.includes(x),
+          ),
+        "consent_restriction",
+        "Existing consent subjects cannot be removed from this resource or later editions",
+      );
+      await tx.put("permission-subjects", rootKey, root?.revision ?? 0, {
+        subjects: [...resource.requiredConsentSubjects],
+      });
+      return (
+        await tx.put(
+          "permission-resource",
+          digest(resource.ref),
+          expectedRevision,
+          resource,
+        )
+      ).revision;
+    });
+  }
+  async grantRights(
+    c: Context,
+    input: Parameters<typeof createRightsGrant>[1],
+    commandId: string,
+  ): Promise<RightsGrant> {
+    c = structuredClone(c);
+    input = structuredClone(input);
+    this.#manager(c);
+    return scoped(this.#db, c, (tx) =>
+      tx.idempotent(commandId, json(input), async () => {
+        await this.#resource(tx, c, input.resource.ref, input.resource.digest);
+        const value = createRightsGrant(c, input);
+        await tx.put("rights-grant", key("rights-grant", input.id), 0, value);
+        return value as unknown as Json;
+      }),
+    ) as Promise<unknown> as Promise<RightsGrant>;
+  }
+  async recordConsent(
+    c: Context,
+    input: Parameters<typeof createConsent>[1],
+    commandId: string,
+  ): Promise<Consent> {
+    c = structuredClone(c);
+    input = structuredClone(input);
+    if (!this.#participant(c, input.subjectId)) this.#manager(c);
+    return scoped(this.#db, c, (tx) =>
+      tx.idempotent(commandId, json(input), async () => {
+        const resource = await this.#resource(
+          tx,
+          c,
+          input.resource.ref,
+          input.resource.digest,
+        );
+        invariant(
+          resource.requiredConsentSubjects.includes(input.subjectId),
+          "subject_not_required",
+          "Subject is not registered on this resource",
+        );
+        const value = createConsent(c, input);
+        await tx.put("consent", key("consent", input.id), 0, value);
+        return value as unknown as Json;
+      }),
+    ) as Promise<unknown> as Promise<Consent>;
+  }
+  async withdraw(
+    c: Context,
+    kind: "consent" | "rights-grant",
+    id: string,
+    expectedRevision: number,
+    commandId: string,
+  ): Promise<Consent | RightsGrant> {
+    c = structuredClone(c);
+    requireScope(c, this.#policy);
+    invariant(
+      ["consent", "rights-grant"].includes(kind),
+      "invalid_kind",
+      "Unknown permission kind",
+    );
+    return scoped(this.#db, c, (tx) =>
+      tx.idempotent(commandId, { kind, id, expectedRevision }, async () => {
+        const record = await tx.get<Consent | RightsGrant>(kind, key(kind, id));
+        invariant(record, "not_found", "Permission is unavailable");
+        requireScope(c, record.value.ref);
+        if (
+          kind === "rights-grant" ||
+          !this.#participant(c, (record.value as Consent).subjectId)
+        )
+          this.#manager(c);
+        invariant(
+          record.revision === expectedRevision &&
+            record.value.ref.revision === record.revision,
+          "revision_conflict",
+          "Permission revision changed",
+        );
+        const value = withdrawPermission(c, record.value);
+        await tx.put(kind, key(kind, id), expectedRevision, value);
+        await tx.enqueue(
+          "permission.withdrawn",
+          {
+            kind,
+            id,
+            revision: value.ref.revision,
+            resource: record.value.resource.ref as unknown as Json,
+          },
+          digest({ kind, id, revision: value.ref.revision }),
+        );
+        return value as unknown as Json;
+      }),
+    ) as Promise<unknown> as Promise<Consent | RightsGrant>;
+  }
+  async evaluate(
+    c: Context,
+    ref: Ref,
+    request: UseRequest,
+    ids: { rights: readonly string[]; consents: readonly string[] },
+  ): Promise<UseDecision> {
+    c = structuredClone(c);
+    ref = structuredClone(ref);
+    request = structuredClone(request);
+    ids = structuredClone(ids);
+    requireScope(c, this.#policy);
+    invariant(
+      c.actor.roles.some((r) =>
+        ["viewer", "researcher", "operator", "owner", "rights:read"].includes(
+          r,
+        ),
+      ),
+      "read_denied",
+      "Permission evaluation requires scoped research access",
+    );
+    assertRef(c, ref);
+    invariant(
+      ids.rights.length <= 100 && ids.consents.length <= 100,
+      "too_many_permissions",
+      "At most100grant and100consent IDs per decision",
+    );
+    return scoped(this.#db, c, async (tx) => {
+      const resource = await this.#resource(tx, c, ref);
+      const rights: RightsGrant[] = [],
+        consents: Consent[] = [];
+      for (const id of ids.rights) {
+        const row = await tx.get<RightsGrant>(
+          "rights-grant",
+          key("rights-grant", id),
+        );
+        if (row) rights.push(row.value);
+      }
+      for (const id of ids.consents) {
+        const row = await tx.get<Consent>("consent", key("consent", id));
+        if (row) consents.push(row.value);
+      }
+      const decision = decideUse(c, resource, request, rights, consents);
+      await tx.audit("permission.evaluated", {
+        resource: ref as unknown as Json,
+        allowed: decision.allowed,
+        decisionHash: digest(decision),
+      });
+      return decision;
+    });
+  }
+  async #resource(
+    tx: UnitOfWork,
+    c: Context,
+    ref: Ref,
+    sha256?: string,
+  ): Promise<UseResource> {
+    assertRef(c, ref);
+    const record = await tx.get<UseResource>(
+      "permission-resource",
+      digest(ref),
+    );
+    invariant(
+      record,
+      "not_found",
+      "Resource permission policy is not registered",
+    );
+    requireScope(c, record.value.ref);
+    invariant(
+      digest(record.value.ref) === digest(ref) &&
+        (sha256 === undefined || record.value.digest === sha256),
+      "resource_changed",
+      "Resource binding changed",
+    );
+    return record.value;
+  }
+}
