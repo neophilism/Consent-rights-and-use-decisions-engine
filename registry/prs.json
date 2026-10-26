@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "repository": "neophilism/Consent-rights-and-use-decisions-engine",
+  "roadmapVersion": 1,
+  "planVerified": true,
+  "plannedPrCount": 6,
+  "observedAt": "2026-10-26T18:50:00Z",
+  "units": [
+    {
+      "id": "CRU-001",
+      "title": "Purpose-specific rights and explicit consent",
+      "origin": "original",
+      "prs": [],
+      "contributingPrs": [],
+      "dependsOn": [],
+      "externalDependencies": [],
+      "externalPrerequisites": [],
+      "scope": [
+        "Purpose-specific rights and explicit consent"
+      ],
+      "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
+      "implementationStatus": "planned"
+    },
+    {
+      "id": "CRU-002",
+      "title": "Exact revision use decisions expiry and withdrawal",
+      "origin": "original",
+      "prs": [],
+      "contributingPrs": [],
+      "dependsOn": [
+        "CRU-001"
+      ],
+      "externalDependencies": [],
+      "externalPrerequisites": [],
+      "scope": [
+        "Exact revision use decisions expiry and withdrawal"
+      ],
+      "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
+      "implementationStatus": "planned"
+    },
+    {
+      "id": "CRU-003",
+      "title": "Persistent permission registry and supersession",
+      "origin": "original",
+      "prs": [],
+      "contributingPrs": [],
+      "dependsOn": [
+        "CRU-002"
+      ],
+      "externalDependencies": [],
+      "externalPrerequisites": [],
+      "scope": [
+        "Persistent permission registry and supersession"
+      ],
+      "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
+      "implementationStatus": "planned"
+    },
+    {
+      "id": "CRU-004",
+      "title": "Participant consent capture and review",
+      "origin": "original",
+      "prs": [],
+      "contributingPrs": [],
+      "dependsOn": [
+        "CRU-003"
+      ],
+      "externalDependencies": [],
+      "externalPrerequisites": [],
+      "scope": [
+        "Participant consent capture and review"
+      ],
+      "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
+      "implementationStatus": "planned"
+    },
+    {
+      "id": "CRU-005",
+      "title": "Visual decision inspector and impact events",
+      "origin": "original",
+      "prs": [],
+      "contributingPrs": [],
+      "dependsOn": [
+        "CRU-003"
+      ],
+      "externalDependencies": [],
+      "externalPrerequisites": [],
+      "scope": [
+        "Visual decision inspector and impact events"
+      ],
+      "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
+      "implementationStatus": "planned"
+    },
+    {
+      "id": "CRU-006",
+      "title": "Integration and reusable release acceptance",
+      "origin": "original",
+      "prs": [],
+      "contributingPrs": [],
+      "dependsOn": [
+        "CRU-004",
+        "CRU-005"
+      ],
+      "externalDependencies": [],
+      "externalPrerequisites": [],
+      "scope": [
+        "Integration and reusable release acceptance"
+      ],
+      "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
+      "implementationStatus": "planned"
+    }
+  ],
+  "pullRequests": []
+}

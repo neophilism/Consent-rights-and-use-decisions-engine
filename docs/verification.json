@@ -1,0 +1,16 @@
+{
+  "stage": "local",
+  "testsPassed": 5,
+  "independentHumanAudit": "pending",
+  "liveAcceptance": "not_performed",
+  "commands": [
+    "npm run typecheck",
+    "npm test",
+    "npm run build",
+    "node scripts/validate-pr-registry.mjs"
+  ],
+  "sourceHashes": {
+    "src/contracts.ts": "d86141cb7546a723f837a298e4ea6fef62692918f78f5aab2d72d6639987fcc5",
+    "src/index.ts": "bdae11368abbc5d9aeae29e039682baad30915eb8f5df58156a20e0ea9f2e892"
+  }
+}
