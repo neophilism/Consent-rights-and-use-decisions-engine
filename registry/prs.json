@@ -47,7 +47,9 @@
       "title": "Persistent permission registry and supersession",
       "origin": "original",
       "prs": [],
-      "contributingPrs": [],
+      "contributingPrs": [
+        2
+      ],
       "dependsOn": [
         "CRU-002"
       ],
@@ -57,7 +59,7 @@
         "Persistent permission registry and supersession"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "planned"
+      "implementationStatus": "implemented_local_integration_passed"
     },
     {
       "id": "CRU-004",
