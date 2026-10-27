@@ -1,5 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
-import { DomainError, invariant, nonempty, requireScope } from "./contracts.ts";
+import {
+  DomainError,
+  invariant,
+  nonempty,
+  requireScope,
+  validTime,
+} from "./contracts.ts";
 import type { Context, Scope } from "./contracts.ts";
 import { assertContext } from "./index.ts";
 import type { PermissionRegistry } from "./registry.ts";
@@ -100,7 +106,8 @@ async function session(
   request: Request,
   timeoutMs: number,
 ): Promise<ParticipantSession> {
-  const controller = new AbortController();
+  const controller = new AbortController(),
+    deadline = performance.now() + timeoutMs;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let interrupt = () => {};
   let timedOut = false;
@@ -109,7 +116,7 @@ async function session(
   if (request.signal.aborted) abort();
   try {
     invariant(
-      !controller.signal.aborted,
+      !controller.signal.aborted && performance.now() < deadline,
       "request_aborted",
       "Request cancelled",
     );
@@ -117,20 +124,36 @@ async function session(
       Promise.resolve()
         .then(() => {
           invariant(
-            !controller.signal.aborted,
+            !controller.signal.aborted && performance.now() < deadline,
             "request_aborted",
             "Request cancelled",
           );
-          return auth.authenticate(
-            {
-              url: request.url,
-              method: request.method,
-              headers: new Headers(request.headers),
-            },
-            controller.signal,
+          const metadata = {
+            url: request.url,
+            method: request.method,
+            headers: new Headers(request.headers),
+          };
+          invariant(
+            !controller.signal.aborted && performance.now() < deadline,
+            "authentication_unavailable",
+            "Authentication deadline exceeded",
           );
+          return auth.authenticate(metadata, controller.signal);
         })
-        .then((value) => (value === null ? null : structuredClone(value)))
+        .then((value) => {
+          invariant(
+            !controller.signal.aborted && performance.now() < deadline,
+            "authentication_unavailable",
+            "Authentication deadline exceeded",
+          );
+          const captured = value === null ? null : structuredClone(value);
+          invariant(
+            performance.now() < deadline,
+            "authentication_unavailable",
+            "Authentication deadline exceeded",
+          );
+          return captured;
+        })
         .catch(() => {
           throw new DomainError(
             "authentication_unavailable",
@@ -153,13 +176,33 @@ async function session(
       }),
     ]);
     invariant(
-      !controller.signal.aborted,
+      !controller.signal.aborted && performance.now() < deadline,
       timedOut ? "authentication_unavailable" : "request_aborted",
       "Request cancelled",
     );
     invariant(result, "authentication_required", "Authentication required");
     try {
-      assertContext(result.context);
+      const c = result.context;
+      assertContext(c);
+      for (const field of [
+        c.tenantId,
+        c.projectId,
+        c.actor.id,
+        c.purpose,
+        c.requestId,
+      ])
+        nonempty(field, "Authenticated context", 200);
+      nonempty(c.now, "Authenticated time", 64);
+      validTime(c.now);
+      invariant(
+        Array.isArray(c.actor.roles) &&
+          c.actor.roles.length <= 128 &&
+          c.actor.roles.every(
+            (role) => typeof role === "string" && role.length <= 128,
+          ),
+        "authentication_unavailable",
+        "Invalid roles",
+      );
     } catch {
       throw new DomainError(
         "authentication_unavailable",
@@ -178,11 +221,17 @@ async function session(
       "authentication_unavailable",
       "Invalid session binding",
     );
+    invariant(
+      !controller.signal.aborted && performance.now() < deadline,
+      "authentication_unavailable",
+      "Authentication deadline exceeded",
+    );
     return result;
   } finally {
     if (timer) clearTimeout(timer);
     request.signal.removeEventListener("abort", abort);
     controller.signal.removeEventListener("abort", interrupt);
+    controller.abort();
   }
 }
 async function jsonBody(request: Request, timeoutMs: number): Promise<unknown> {
@@ -200,7 +249,16 @@ async function jsonBody(request: Request, timeoutMs: number): Promise<unknown> {
     "Request body exceeds budget",
   );
   invariant(request.body, "invalid_request", "Body required");
-  const reader = request.body.getReader();
+  const reader = request.body.getReader(),
+    deadline = performance.now() + timeoutMs;
+  function gate() {
+    invariant(!request.signal.aborted, "request_aborted", "Request cancelled");
+    invariant(
+      performance.now() < deadline,
+      "body_timeout",
+      "Body deadline exceeded",
+    );
+  }
   let timer: ReturnType<typeof setTimeout> | undefined;
   let interrupt = () => {};
   const interrupted = new Promise<never>((_, reject) => {
@@ -218,7 +276,9 @@ async function jsonBody(request: Request, timeoutMs: number): Promise<unknown> {
     let bytes = 0,
       count = 0;
     while (true) {
+      gate();
       const part = await Promise.race([reader.read(), interrupted]);
+      gate();
       if (part.done) break;
       count++;
       bytes += part.value.byteLength;
@@ -229,13 +289,17 @@ async function jsonBody(request: Request, timeoutMs: number): Promise<unknown> {
       );
       chunks.push(new Uint8Array(part.value));
     }
+    let parsed: unknown;
+    gate();
     try {
-      return JSON.parse(
+      parsed = JSON.parse(
         new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)),
       );
     } catch {
       throw new DomainError("invalid_request", "UTF8 JSON required");
     }
+    gate();
+    return parsed;
   } finally {
     if (timer) clearTimeout(timer);
     request.signal.removeEventListener("abort", interrupt);

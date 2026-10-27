@@ -4,7 +4,7 @@
   "roadmapVersion": 1,
   "planVerified": true,
   "plannedPrCount": 6,
-  "observedAt": "2026-10-27T21:14:22Z",
+  "observedAt": "2026-10-27T22:59:27Z",
   "units": [
     {
       "id": "CRU-001",
@@ -81,7 +81,7 @@
         "Participant consent capture and review"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "partial_durable_workflow_and_host_authenticated_http_local_integration_passed",
+      "implementationStatus": "partial_durable_workflow_and_host_authenticated_http_local_integration_passed; WIP monotonic authentication/body admission and signal closure after three actual restricted-migration blocked-event-loop regressions failed on old main. Local/package/final-head CI pending; existing API/order/SQL uncertainty preserved.",
       "remainingWork": [
         "Authenticated hosting/session integration and accessible participant UI",
         "Identity verification and informed consent qualification",
