@@ -1,0 +1,23 @@
+{
+  "stage": "local",
+  "ordinaryTestsPassed": 34,
+  "installedHttpDeadlineGroupsPassed": 12,
+  "newRestrictedMigrationRegressionGroups": 3,
+  "baseline": {
+    "source": "3303a035f09ae67924ff8bdab3cd6670e55e9ac0",
+    "failed": 3,
+    "actual": "HTTP200 late session/acceptance/body versus required503/408"
+  },
+  "sourceHashes": {
+    "src/participant-http.ts": "c5d6a9e5c40150c1257f683ff6c179780dfb786b81703cc71dad2b508eb100b4",
+    "tests/http-deadline.test.ts": "a153bc27d74fb14da40934d2bc9b8bc48edfa2f3c3838da6d6a578fdc53377fc",
+    "src/contracts.ts": "d86141cb7546a723f837a298e4ea6fef62692918f78f5aab2d72d6639987fcc5"
+  },
+  "finalHeadCi": "required_before_merge",
+  "newNetworkScenarioLiveIdentityServerBrowser": "not_performed",
+  "limits": [
+    "Existing authentication-before-body order preserved, current role/mapping refresh remains host trust",
+    "Cannot preempt blocked JS/undo callback effects; begun SQL awaited",
+    "No new operations, credentials, send or publication"
+  ]
+}
