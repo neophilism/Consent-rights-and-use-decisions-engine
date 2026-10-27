@@ -252,6 +252,8 @@ export function createParticipantHandler(
   configuration: ParticipantHttpPolicy,
 ): (request: Request) => Promise<Response> {
   const policy = structuredClone(configuration);
+  nonempty(policy.tenantId, "Tenant id", 200);
+  nonempty(policy.projectId, "Project id", 200);
   const origin = new URL(policy.origin);
   invariant(
     origin.protocol === "https:" &&

@@ -444,3 +444,164 @@ test("HTTP policy is captured, HTTPS only, and native same-origin read metadata 
     403,
   );
 });
+
+test("HTTP cancellation interrupts active auth/body waits and late auth cannot mutate", async (t) => {
+  const { registry } = await setup(t);
+  const envelope = { commandId: "never", input: await response(registry) };
+  const controller = new AbortController();
+  let started!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let finish!: (value: { context: Context; csrfToken: string }) => void;
+  let signal: AbortSignal | undefined;
+  const handler = createParticipantHandler(
+    registry,
+    {
+      authenticate: (_meta, value) => {
+        signal = value;
+        started();
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    },
+    policy,
+  );
+  const pending = handler(
+    new Request(request("/participant/respond", envelope), {
+      signal: controller.signal,
+    }),
+  );
+  await ready;
+  controller.abort();
+  assert.equal((await pending).status, 408);
+  assert.equal(signal?.aborted, true);
+  finish({ context: participant, csrfToken: csrf });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(
+    (await registry.reviewOffer(participant, "offer")).offer.status,
+    "offered",
+  );
+
+  const bodyController = new AbortController();
+  let bodyStarted!: () => void;
+  const bodyReady = new Promise<void>((resolve) => {
+    bodyStarted = resolve;
+  });
+  let cancelled = false;
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull() {
+        bodyStarted();
+        return new Promise(() => {});
+      },
+      cancel() {
+        cancelled = true;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const bodyHandler = createParticipantHandler(registry, auth, policy);
+  const req = new Request(origin + "/participant/respond", {
+    method: "POST",
+    headers: {
+      origin,
+      "x-csrf-token": csrf,
+      "content-type": "application/json",
+    },
+    body,
+    duplex: "half",
+    signal: bodyController.signal,
+  } as RequestInit & { duplex: "half" });
+  const reading = bodyHandler(req);
+  await bodyReady;
+  bodyController.abort();
+  assert.equal((await reading).status, 408);
+  assert.equal(cancelled, true);
+  assert.equal(
+    (await registry.reviewOffer(participant, "offer")).offer.status,
+    "offered",
+  );
+});
+
+test("HTTP malformed authenticated sessions, refusal, decline and stale revisions stay explicit", async (t) => {
+  const { registry } = await setup(t);
+  for (const token of ["", "x".repeat(31), " ".repeat(40), "x".repeat(257)]) {
+    const handler = createParticipantHandler(
+      registry,
+      {
+        authenticate: async () => ({ context: participant, csrfToken: token }),
+      },
+      policy,
+    );
+    assert.equal((await handler(request("/participant/session"))).status, 503);
+  }
+  const malformed = createParticipantHandler(
+    registry,
+    {
+      authenticate: async () => ({
+        context: { ...participant, now: "invalid" },
+        csrfToken: csrf,
+      }),
+    },
+    policy,
+  );
+  assert.equal((await malformed(request("/participant/session"))).status, 503);
+  const handler = createParticipantHandler(registry, auth, policy);
+  const envelope = { commandId: "respond", input: await response(registry) };
+  assert.equal(
+    (
+      await handler(
+        request("/participant/respond", {
+          ...envelope,
+          input: { ...envelope.input, acknowledged: false },
+        }),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await handler(
+        request("/participant/respond", {
+          ...envelope,
+          input: { ...envelope.input, expectedRevision: 2 },
+        }),
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await handler(
+        request("/participant/withdraw", {
+          commandId: "w",
+          offerId: "offer",
+          expectedConsentRevision: 1,
+        }),
+      )
+    ).status,
+    404,
+  );
+  const declined = await handler(
+    request("/participant/respond", {
+      ...envelope,
+      input: { ...envelope.input, response: "decline", acknowledged: false },
+    }),
+  );
+  assert.equal(declined.status, 200);
+  assert.equal((await details(declined)).status, "declined");
+  assert.equal(
+    (
+      await handler(
+        request("/participant/respond", { ...envelope, commandId: "new" }),
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await registry.reviewOffer(participant, "offer")).consent,
+    null,
+  );
+});
