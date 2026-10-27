@@ -249,74 +249,77 @@ for (const contender of ["decline", "cancel"] as const) {
     },
   );
 }
-test(
-  "evaluation loads withdrawn consent after a directly observed project-lock wait",
-  { timeout: 20000 },
-  async (t) => {
-    const f = await fixture(t, "consent-evaluation-lock");
-    const accepted = await f.sa.respondToOffer(
-      f.participant,
-      f.command,
-      "accept",
-    );
-    const consentId = accepted.consent!.ref.id;
-    const request = {
-        action: "reproduce" as const,
-        audience: "private",
-        attribution: null,
-      },
-      ids = { rights: ["rights"], consents: [consentId] };
-    assert.equal(
-      (await f.sb.evaluate(f.manager, f.resource.ref, request, ids)).allowed,
-      true,
-    );
-    const locked = gate(),
-      release = gate();
-    // The real withdrawal callback finished, but its owning transaction still holds the project lock before COMMIT.
-    const delayed: Database = {
-      transaction: (fn) =>
-        f.a.transaction(async (q) => {
-          const value = await fn(q);
-          locked.resolve();
-          await release.promise;
-          return value;
-        }),
-      close: async () => {},
-    };
-    const hold = new PermissionRegistry(delayed, f.policy).withdraw(
-      f.participant,
-      "consent",
-      consentId,
-      1,
-      "withdraw",
-    );
-    let pending: ReturnType<PermissionRegistry["evaluate"]> | undefined;
-    try {
-      await Promise.race([locked.promise, hold]);
-      pending = f.sb.evaluate(f.manager, f.resource.ref, request, ids);
-      const outcome = pending.then(
-        (value) => ({ value }),
-        (error) => ({ error }),
+for (const kind of ["consent", "rights-grant"] as const) {
+  test(
+    `evaluation loads withdrawn ${kind} after a directly observed project-lock wait`,
+    { timeout: 20000 },
+    async (t) => {
+      const f = await fixture(t, "evaluation-lock-" + kind);
+      const accepted = await f.sa.respondToOffer(
+        f.participant,
+        f.command,
+        "accept",
       );
-      await observedLock(f.id + "-b");
-      release.resolve();
-      await hold;
-      const result = await outcome;
-      assert.ok("value" in result);
+      const consentId = accepted.consent!.ref.id;
+      const request = {
+          action: "reproduce" as const,
+          audience: "private",
+          attribution: null,
+        },
+        ids = { rights: ["rights"], consents: [consentId] };
       assert.equal(
-        result.value.allowed,
-        false,
-        "A withdrawn permission must not authorize a post-lock decision",
+        (await f.sb.evaluate(f.manager, f.resource.ref, request, ids)).allowed,
+        true,
       );
-      const review = await f.sb.reviewOffer(f.participant, "offer");
-      assert.equal(review.consent?.ref.revision, 2);
-    } finally {
-      release.resolve();
-      await hold;
-      await pending?.catch(() => {});
-    }
-  },
-);
+      const locked = gate(),
+        release = gate();
+      // The real withdrawal callback finished, but its owning transaction still holds the project lock before COMMIT.
+      const delayed: Database = {
+        transaction: (fn) =>
+          f.a.transaction(async (q) => {
+            const value = await fn(q);
+            locked.resolve();
+            await release.promise;
+            return value;
+          }),
+        close: async () => {},
+      };
+      const hold = new PermissionRegistry(delayed, f.policy).withdraw(
+        f.participant,
+        kind,
+        kind === "consent" ? consentId : "rights",
+        1,
+        "withdraw",
+      );
+      let pending: ReturnType<PermissionRegistry["evaluate"]> | undefined;
+      try {
+        await Promise.race([locked.promise, hold]);
+        pending = f.sb.evaluate(f.manager, f.resource.ref, request, ids);
+        const outcome = pending.then(
+          (value) => ({ value }),
+          (error) => ({ error }),
+        );
+        await observedLock(f.id + "-b");
+        release.resolve();
+        await hold;
+        const result = await outcome;
+        assert.ok("value" in result);
+        assert.equal(
+          result.value.allowed,
+          false,
+          "A withdrawn permission must not authorize a post-lock decision",
+        );
+        const review = await f.sb.reviewOffer(f.participant, "offer");
+        assert.equal(review.consent?.ref.revision, kind === "consent" ? 2 : 1);
+      } finally {
+        release.resolve();
+        await hold;
+        await pending?.catch(() => {});
+      }
+    },
+  );
+}
+
 test(
   "lost acceptance acknowledgement survives a fresh pool and replay cannot revive withdrawal",
   { timeout: 20000 },

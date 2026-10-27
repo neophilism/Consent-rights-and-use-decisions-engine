@@ -1,0 +1,23 @@
+{
+  "stage": "local_fix_ci_pending",
+  "ordinaryTestsPassed": 31,
+  "networkGroupsAuthored": 6,
+  "regression": {
+    "source": "9e79d23cc4ff2ad269e1e5072727de52072100a6",
+    "run": 40584349719,
+    "job": 122471750816,
+    "result": "4 passed/1 failed on unchanged runtime: consent evaluated allowed=true after directly observed withdrawal lock wait",
+    "logsInspected": true
+  },
+  "sourceHashes": {
+    "src/registry.ts": "99de561854625eb3026e646161448cea6e9ff71513221661f78aee903da2e3e6",
+    "src/index.ts": "bdae11368abbc5d9aeae29e039682baad30915eb8f5df58156a20e0ea9f2e892",
+    "src/contracts.ts": "d86141cb7546a723f837a298e4ea6fef62692918f78f5aab2d72d6639987fcc5",
+    "integration/postgres-permissions.test.ts": "8866a2c9fbb963a5395e445242ec75ad59a91e32a3efad19b49a4c3c62004d12"
+  },
+  "correctedNetworkExecution": "pending",
+  "installedPublicPackage": "pending",
+  "finalHeadCi": "required_before_merge",
+  "productionIdentityRightsTimeTlsDeployment": "unqualified",
+  "externalActionAtomicFence": false
+}

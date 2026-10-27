@@ -4,7 +4,7 @@
   "roadmapVersion": 1,
   "planVerified": true,
   "plannedPrCount": 6,
-  "observedAt": "2026-10-27T21:08:43Z",
+  "observedAt": "2026-10-27T21:11:06Z",
   "units": [
     {
       "id": "CRU-001",
@@ -48,7 +48,8 @@
       "origin": "original",
       "prs": [],
       "contributingPrs": [
-        2
+        2,
+        5
       ],
       "dependsOn": [
         "CRU-002"
@@ -59,7 +60,7 @@
         "Persistent permission registry and supersession"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "implemented_local_integration_passed"
+      "implementationStatus": "Durable permission/participant foundations with PR5 current-read serialization fix: checked audit acquires project lock BEFORE all evaluation reads. Real unchanged-runtime regression CI40584349719/job122471750816 reproduced stale allowed=true after committed consent withdrawal; corrected-source six-scenario CI remains required. No atomic downstream action fence or production rights/identity qualification."
     },
     {
       "id": "CRU-004",
@@ -68,7 +69,8 @@
       "prs": [],
       "contributingPrs": [
         3,
-        4
+        4,
+        5
       ],
       "dependsOn": [
         "CRU-003"
@@ -114,7 +116,9 @@
       "title": "Integration and reusable release acceptance",
       "origin": "original",
       "prs": [],
-      "contributingPrs": [],
+      "contributingPrs": [
+        5
+      ],
       "dependsOn": [
         "CRU-004",
         "CRU-005"
@@ -125,7 +129,7 @@
         "Integration and reusable release acceptance"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "WIP: five disposable PostgreSQL17 network-session scenarios authored with safe fixture admission and canonical migration/restricted LOGIN. Actual execution pending. Evaluation-versus-withdrawal lock test is an unreproduced review lead, not an accepted finding. No runtime change or production/live qualification."
+      "implementationStatus": "Partial PR5: six disposable PostgreSQL17 restricted TCP-session scenarios (acceptance/decline/cancel, observed consent and rights withdrawal waits, lost acknowledgement/fresh pool, roles/scopes), one ordinary group with four unsafe fixture rejections. 31 local groups/typecheck/build/registry pass. Actual corrected-source and all final-head CI/installed package evidence are separate; deployment and live release acceptance remain pending."
     }
   ],
   "pullRequests": []

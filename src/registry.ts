@@ -246,6 +246,11 @@ export class PermissionRegistry {
       "At most100grant and100consent IDs per decision",
     );
     return scoped(this.#db, c, async (tx) => {
+      // Serialize with permission mutations BEFORE loading any current editions.
+      // The final decision audit alone would lock only after stale rows were read.
+      await tx.audit("permission.evaluation.checked", {
+        resource: ref as unknown as Json,
+      });
       const resource = await this.#resource(tx, c, ref);
       const rights: RightsGrant[] = [],
         consents: Consent[] = [];
