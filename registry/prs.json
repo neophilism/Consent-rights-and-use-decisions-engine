@@ -4,7 +4,7 @@
   "roadmapVersion": 1,
   "planVerified": true,
   "plannedPrCount": 6,
-  "observedAt": "2026-10-26T18:50:00Z",
+  "observedAt": "2026-10-27T04:57:30Z",
   "units": [
     {
       "id": "CRU-001",
@@ -66,7 +66,9 @@
       "title": "Participant consent capture and review",
       "origin": "original",
       "prs": [],
-      "contributingPrs": [],
+      "contributingPrs": [
+        3
+      ],
       "dependsOn": [
         "CRU-003"
       ],
@@ -76,7 +78,17 @@
         "Participant consent capture and review"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "planned"
+      "implementationStatus": "partial_durable_participant_offer_workflow_local_integration_passed",
+      "remainingWork": [
+        "Authenticated host/session and participant UI integration",
+        "Identity verification and informed consent qualification",
+        "Independent network-session concurrency and live acceptance"
+      ],
+      "implementationEvidence": {
+        "pullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/3",
+        "localTests": 21,
+        "scope": "Stored exact disclosure proposals, participant-bound review/accept/decline, replay and current withdrawal; no HTTP portal or live participants"
+      }
     },
     {
       "id": "CRU-005",

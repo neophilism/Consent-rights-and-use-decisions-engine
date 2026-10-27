@@ -8,3 +8,5 @@ npm run check
 ```
 
 All research and jurisdiction configuration belong in downstream deployments. Implementation, local tests, CI, merge and live acceptance are separate.
+
+The durable registry exports participant proposal/review/capture operations. See [participant workflow and host boundaries](docs/PARTICIPANTS.md); `./participant` exports the offer/review types and digest profile.

@@ -15,6 +15,10 @@
     "./registry": {
       "types": "./dist/registry.d.ts",
       "default": "./dist/registry.js"
+    },
+    "./participant": {
+      "types": "./dist/participant.d.ts",
+      "default": "./dist/participant.js"
     }
   },
   "engines": {
