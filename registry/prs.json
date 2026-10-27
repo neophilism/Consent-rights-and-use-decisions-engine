@@ -4,7 +4,7 @@
   "roadmapVersion": 1,
   "planVerified": true,
   "plannedPrCount": 6,
-  "observedAt": "2026-10-27T05:05:57Z",
+  "observedAt": "2026-10-27T21:08:43Z",
   "units": [
     {
       "id": "CRU-001",
@@ -125,7 +125,7 @@
         "Integration and reusable release acceptance"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "planned"
+      "implementationStatus": "WIP: five disposable PostgreSQL17 network-session scenarios authored with safe fixture admission and canonical migration/restricted LOGIN. Actual execution pending. Evaluation-versus-withdrawal lock test is an unreproduced review lead, not an accepted finding. No runtime change or production/live qualification."
     }
   ],
   "pullRequests": []
