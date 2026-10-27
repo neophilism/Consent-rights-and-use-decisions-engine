@@ -1,6 +1,6 @@
 {
   "stage": "local_source_reviewed",
-  "testsPassed": 21,
+  "testsPassed": 30,
   "independentHumanAudit": "pending",
   "liveAcceptance": "not_performed",
   "commands": [
@@ -13,12 +13,19 @@
     "src/participant.ts": "a9f4f00030318a4b087240508268d34a8be08c14c44e013afe57fa001261f603",
     "src/index.ts": "bdae11368abbc5d9aeae29e039682baad30915eb8f5df58156a20e0ea9f2e892",
     "src/contracts.ts": "d86141cb7546a723f837a298e4ea6fef62692918f78f5aab2d72d6639987fcc5",
-    "src/registry.ts": "5d280c433d0cefa1cca59c56ecb43ed80d97eec8341ca12efb86897471c8e26e"
+    "src/registry.ts": "5d280c433d0cefa1cca59c56ecb43ed80d97eec8341ca12efb86897471c8e26e",
+    "src/participant-http.ts": "eec2c11714a2da0f7f82aba0c825c68c97dffcdcda4eceafd699e49ec8e03873"
   },
   "participantWorkflow": {
     "newIntegrationGroups": 10,
     "database": "Pinned SDK actual migration, restricted embedded PGlite login",
     "liveAcceptance": "not_performed",
     "networkSessionContention": "not_performed"
+  },
+  "participantHttp": {
+    "newIntegrationGroups": 9,
+    "requests": "Native Fetch Request/Response over actual accepted registry and restricted PGlite migrations",
+    "hostLoginBrowserLiveAcceptance": "not_performed",
+    "transport": "No listening socket or external network call"
   }
 }

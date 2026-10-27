@@ -17,3 +17,7 @@ Real PGlite tests apply the pinned SDK migration and use a restricted login, wit
 ## Participant offer workflow
 
 [Participant offers](PARTICIPANTS.md) separate manager-authored proposals from authenticated participant responses. A response binds the viewed stored revision and disclosure/terms digest. Acceptance, consent creation, resolved proposal, audit assertion and response event are transactional. Decline/cancel do not grant permission. Participant review returns current consent after withdrawal while retaining the original capture receipt. Cached response and withdrawal receipts require current participant/manager authority; replay cannot restore withdrawn consent. This is trusted library orchestration, not a hosted identity service or an atomic fence across downstream uses.
+
+## Participant HTTP adapter
+
+The opt-in [private participant handler](PARTICIPANT_HTTP.md) adds host-authenticated session, exact offer review, response and own-consent withdrawal routes over the accepted durable registry. It restricts Origin/Fetch Metadata, binds writes to session CSRF and bounds authentication/body admission. It does not provide login, send invitations, expose manager commands or authorize release. An actual host and participant UI still require qualification.
