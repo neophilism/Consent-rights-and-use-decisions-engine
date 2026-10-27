@@ -13,11 +13,17 @@
     "src/registry.ts": "99de561854625eb3026e646161448cea6e9ff71513221661f78aee903da2e3e6",
     "src/index.ts": "bdae11368abbc5d9aeae29e039682baad30915eb8f5df58156a20e0ea9f2e892",
     "src/contracts.ts": "d86141cb7546a723f837a298e4ea6fef62692918f78f5aab2d72d6639987fcc5",
-    "integration/postgres-permissions.test.ts": "8866a2c9fbb963a5395e445242ec75ad59a91e32a3efad19b49a4c3c62004d12"
+    "integration/postgres-permissions.test.ts": "841b85ffaa454aa636750d70301f07660ee2a5104f8e25f7f11417003f839640"
   },
   "correctedNetworkExecution": "pending",
-  "installedPublicPackage": "pending",
+  "installedPublicPackage": "16 registry/participant restricted-migration groups passed through freshly packed installed compiled exports",
   "finalHeadCi": "required_before_merge",
   "productionIdentityRightsTimeTlsDeployment": "unqualified",
-  "externalActionAtomicFence": false
+  "externalActionAtomicFence": false,
+  "intermediateCorrectedRun": {
+    "source": "6cc944b29d83ba6ecd575f21d2ed6019ad7b96ec",
+    "run": 40584689112,
+    "job": 122472922820,
+    "result": "consent lock regression passed; 5 of 6 groups pass. New rights fixture wrongly invoked participant-only identity for a manager-only rights withdrawal; corrected fixture now uses manager. Not final acceptance."
+  }
 }

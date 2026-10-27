@@ -285,7 +285,7 @@ for (const kind of ["consent", "rights-grant"] as const) {
         close: async () => {},
       };
       const hold = new PermissionRegistry(delayed, f.policy).withdraw(
-        f.participant,
+        kind === "consent" ? f.participant : f.manager,
         kind,
         kind === "consent" ? consentId : "rights",
         1,
