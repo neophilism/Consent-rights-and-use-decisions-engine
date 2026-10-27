@@ -1,6 +1,12 @@
 import { scoped } from "@accountability/evidence/database";
 import type { Database, UnitOfWork } from "@accountability/evidence/database";
-import { invariant, digest, requireScope, canonical } from "./contracts.ts";
+import {
+  invariant,
+  digest,
+  requireScope,
+  canonical,
+  validTime,
+} from "./contracts.ts";
 import type { Context, Ref, Json, Scope } from "./contracts.ts";
 import {
   assertRef,
@@ -9,6 +15,8 @@ import {
   createConsent,
   withdrawPermission,
   decideUse,
+  exactBinding,
+  assertContext,
 } from "./index.ts";
 import type {
   RightsGrant,
@@ -17,6 +25,12 @@ import type {
   UseRequest,
   UseDecision,
 } from "./index.ts";
+import { reviewDigest, validateOfferInput } from "./participant.ts";
+import type {
+  ConsentOffer,
+  ConsentOfferInput,
+  ParticipantReview,
+} from "./participant.ts";
 export type RegistryPolicy = Scope & {
   managerIds: readonly string[];
   participantActors: Readonly<Record<string, string>>;
@@ -242,6 +256,301 @@ export class PermissionRegistry {
       });
       return decision;
     });
+  }
+  #requireParticipant(c: Context, subjectId: string): void {
+    assertContext(c);
+    invariant(
+      this.#participant(c, subjectId),
+      "participant_required",
+      "Only the authenticated participant bound to this subject may respond",
+    );
+  }
+  async #offer(tx: UnitOfWork, c: Context, id: string) {
+    const row = await tx.get<ConsentOffer>(
+      "consent-offer",
+      key("consent-offer", id),
+    );
+    // A missing offer and an offer belonging to another participant have the same result.
+    invariant(
+      row && this.#participant(c, row.value.subjectId),
+      "offer_unavailable",
+      "Participant offer is unavailable",
+    );
+    invariant(
+      row.value.ref.revision === row.revision,
+      "revision_conflict",
+      "Stored offer revision is inconsistent",
+    );
+    return row;
+  }
+  async createOffer(
+    c: Context,
+    input: ConsentOfferInput,
+    commandId: string,
+  ): Promise<ConsentOffer> {
+    c = structuredClone(c);
+    input = structuredClone(input);
+    assertContext(c);
+    this.#manager(c);
+    validateOfferInput(input, c.now);
+    // Reuse domain term validation; this proposed value is never stored as consent.
+    createConsent(c, {
+      ...input.terms,
+      id: input.id,
+      subjectId: input.subjectId,
+    });
+    invariant(
+      Object.hasOwn(this.#policy.participantActors, input.subjectId),
+      "participant_unbound",
+      "An authenticated participant mapping is required",
+    );
+    return scoped(this.#db, c, (tx) =>
+      tx.idempotent(
+        commandId,
+        json({
+          operation: "create-consent-offer",
+          purpose: c.purpose,
+          actorKind: c.actor.kind,
+          input,
+        }),
+        async () => {
+          const resource = await this.#resource(
+            tx,
+            c,
+            input.terms.resource.ref,
+            input.terms.resource.digest,
+          );
+          invariant(
+            resource.requiredConsentSubjects.includes(input.subjectId),
+            "subject_not_required",
+            "Subject is not registered on this resource",
+          );
+          const offer: ConsentOffer = {
+            ...input,
+            ref: {
+              tenantId: c.tenantId,
+              projectId: c.projectId,
+              kind: "consent-offer",
+              id: input.id,
+              revision: 1,
+            },
+            createdAt: c.now,
+            createdBy: c.actor.id,
+            status: "offered",
+            resolvedAt: null,
+            resolvedBy: null,
+            consent: null,
+          };
+          await tx.put(
+            "consent-offer",
+            key("consent-offer", input.id),
+            0,
+            offer,
+          );
+          return json(offer);
+        },
+      ),
+    ) as Promise<unknown> as Promise<ConsentOffer>;
+  }
+  async reviewOffer(c: Context, id: string): Promise<ParticipantReview> {
+    c = structuredClone(c);
+    assertContext(c);
+    requireScope(c, this.#policy);
+    invariant(
+      c.actor.kind === "human" && c.actor.roles.includes("participant"),
+      "participant_required",
+      "Authenticated participant access is required",
+    );
+    return scoped(this.#db, c, async (tx) => {
+      const { value: offer } = await this.#offer(tx, c, id);
+      let consent: Consent | null = null;
+      if (offer.consent) {
+        const row = await tx.get<Consent>(
+          "consent",
+          key("consent", offer.consent.ref.id),
+        );
+        invariant(
+          row && row.value.subjectId === offer.subjectId,
+          "consent_unavailable",
+          "Current consent is unavailable",
+        );
+        consent = row.value;
+      }
+      return {
+        offer,
+        reviewDigest: reviewDigest(offer),
+        responseOpen:
+          offer.status === "offered" &&
+          validTime(c.now) < validTime(offer.responseExpiresAt),
+        consent,
+        warnings: [
+          "Acknowledgement records a participant assertion; it does not prove reading, comprehension, capacity or freedom from coercion.",
+          "Consent is separate from rights, legal review and release authorization. Withdrawal cannot recall copies already obtained.",
+        ],
+      };
+    });
+  }
+  async respondToOffer(
+    c: Context,
+    input: Readonly<{
+      offerId: string;
+      expectedRevision: number;
+      reviewDigest: string;
+      response: "accept" | "decline";
+      acknowledged: boolean;
+    }>,
+    commandId: string,
+  ): Promise<ConsentOffer> {
+    c = structuredClone(c);
+    input = structuredClone(input);
+    assertContext(c);
+    requireScope(c, this.#policy);
+    invariant(
+      c.actor.kind === "human" && c.actor.roles.includes("participant"),
+      "participant_required",
+      "Authenticated participant access is required",
+    );
+    invariant(
+      input.response === "accept" || input.response === "decline",
+      "invalid_response",
+      "Explicit response is required",
+    );
+    invariant(
+      input.response !== "accept" || input.acknowledged === true,
+      "acknowledgement_required",
+      "Acceptance requires explicit acknowledgement of the exact disclosure and terms",
+    );
+    return scoped(this.#db, c, (tx) =>
+      tx.idempotent(
+        commandId,
+        json({
+          operation: "respond-consent-offer",
+          purpose: c.purpose,
+          actorKind: c.actor.kind,
+          input,
+        }),
+        async () => {
+          const row = await this.#offer(tx, c, input.offerId);
+          const offer = row.value;
+          this.#requireParticipant(c, offer.subjectId);
+          invariant(
+            row.revision === input.expectedRevision &&
+              reviewDigest(offer) === input.reviewDigest,
+            "review_changed",
+            "Review the current offer before responding",
+          );
+          invariant(
+            offer.status === "offered",
+            "offer_closed",
+            "The offer already has a response or was cancelled",
+          );
+          invariant(
+            validTime(c.now) < validTime(offer.responseExpiresAt),
+            "offer_expired",
+            "The response window has ended",
+          );
+          let consentBinding = null;
+          if (input.response === "accept") {
+            await this.#resource(
+              tx,
+              c,
+              offer.terms.resource.ref,
+              offer.terms.resource.digest,
+            );
+            const consent = createConsent(c, {
+              ...offer.terms,
+              id: digest({ profile: "offer-consent-v1", offer: offer.ref }),
+              subjectId: offer.subjectId,
+            });
+            await tx.put("consent", key("consent", consent.ref.id), 0, consent);
+            consentBinding = exactBinding(consent.ref, consent);
+          }
+          const next: ConsentOffer = {
+            ...offer,
+            ref: { ...offer.ref, revision: row.revision + 1 },
+            status: input.response === "accept" ? "accepted" : "declined",
+            resolvedAt: c.now,
+            resolvedBy: c.actor.id,
+            consent: consentBinding,
+          };
+          await tx.put(
+            "consent-offer",
+            key("consent-offer", input.offerId),
+            row.revision,
+            next,
+          );
+          await tx.audit(
+            "participant.offer.responded",
+            json({
+              offer: next.ref,
+              response: input.response,
+              reviewedDigest: input.reviewDigest,
+              acknowledged: input.acknowledged,
+              consent: next.consent,
+            }),
+          );
+          await tx.enqueue(
+            "participant.offer.responded",
+            json({ offer: next.ref, consent: next.consent }),
+            digest(next.ref),
+          );
+          return json(next);
+        },
+      ),
+    ) as Promise<unknown> as Promise<ConsentOffer>;
+  }
+  async cancelOffer(
+    c: Context,
+    id: string,
+    expectedRevision: number,
+    commandId: string,
+  ): Promise<ConsentOffer> {
+    c = structuredClone(c);
+    assertContext(c);
+    this.#manager(c);
+    return scoped(this.#db, c, (tx) =>
+      tx.idempotent(
+        commandId,
+        json({
+          operation: "cancel-consent-offer",
+          purpose: c.purpose,
+          actorKind: c.actor.kind,
+          id,
+          expectedRevision,
+        }),
+        async () => {
+          const row = await tx.get<ConsentOffer>(
+            "consent-offer",
+            key("consent-offer", id),
+          );
+          invariant(row, "offer_unavailable", "Offer is unavailable");
+          invariant(
+            row.revision === expectedRevision,
+            "revision_conflict",
+            "Offer changed",
+          );
+          invariant(
+            row.value.status === "offered",
+            "offer_closed",
+            "Only an unanswered offer can be cancelled",
+          );
+          const next: ConsentOffer = {
+            ...row.value,
+            ref: { ...row.value.ref, revision: row.revision + 1 },
+            status: "cancelled",
+            resolvedAt: c.now,
+            resolvedBy: c.actor.id,
+          };
+          await tx.put(
+            "consent-offer",
+            key("consent-offer", id),
+            row.revision,
+            next,
+          );
+          return json(next);
+        },
+      ),
+    ) as Promise<unknown> as Promise<ConsentOffer>;
   }
   async #resource(
     tx: UnitOfWork,
