@@ -19,6 +19,10 @@
     "./participant": {
       "types": "./dist/participant.d.ts",
       "default": "./dist/participant.js"
+    },
+    "./participant-http": {
+      "types": "./dist/participant-http.d.ts",
+      "default": "./dist/participant-http.js"
     }
   },
   "engines": {
