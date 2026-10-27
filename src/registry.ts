@@ -6,6 +6,7 @@ import {
   requireScope,
   canonical,
   validTime,
+  nonempty,
 } from "./contracts.ts";
 import type { Context, Ref, Json, Scope } from "./contracts.ts";
 import {
@@ -169,43 +170,54 @@ export class PermissionRegistry {
     commandId: string,
   ): Promise<Consent | RightsGrant> {
     c = structuredClone(c);
+    assertContext(c);
     requireScope(c, this.#policy);
     invariant(
       ["consent", "rights-grant"].includes(kind),
       "invalid_kind",
       "Unknown permission kind",
     );
-    return scoped(this.#db, c, (tx) =>
-      tx.idempotent(commandId, { kind, id, expectedRevision }, async () => {
-        const record = await tx.get<Consent | RightsGrant>(kind, key(kind, id));
-        invariant(record, "not_found", "Permission is unavailable");
-        requireScope(c, record.value.ref);
+    return scoped(this.#db, c, async (tx) => {
+      // Current authority is required for cached withdrawal receipts as well as mutations.
+      const authorize = async () => {
+        const row = await tx.get<Consent | RightsGrant>(kind, key(kind, id));
+        invariant(row, "not_found", "Permission is unavailable");
+        requireScope(c, row.value.ref);
         if (
           kind === "rights-grant" ||
-          !this.#participant(c, (record.value as Consent).subjectId)
+          !this.#participant(c, (row.value as Consent).subjectId)
         )
           this.#manager(c);
-        invariant(
-          record.revision === expectedRevision &&
-            record.value.ref.revision === record.revision,
-          "revision_conflict",
-          "Permission revision changed",
-        );
-        const value = withdrawPermission(c, record.value);
-        await tx.put(kind, key(kind, id), expectedRevision, value);
-        await tx.enqueue(
-          "permission.withdrawn",
-          {
-            kind,
-            id,
-            revision: value.ref.revision,
-            resource: record.value.resource.ref as unknown as Json,
-          },
-          digest({ kind, id, revision: value.ref.revision }),
-        );
-        return value as unknown as Json;
-      }),
-    ) as Promise<unknown> as Promise<Consent | RightsGrant>;
+        return row;
+      };
+      await authorize();
+      return tx.idempotent(
+        commandId,
+        { kind, id, expectedRevision },
+        async () => {
+          const record = await authorize();
+          invariant(
+            record.revision === expectedRevision &&
+              record.value.ref.revision === record.revision,
+            "revision_conflict",
+            "Permission revision changed",
+          );
+          const value = withdrawPermission(c, record.value);
+          await tx.put(kind, key(kind, id), expectedRevision, value);
+          await tx.enqueue(
+            "permission.withdrawn",
+            {
+              kind,
+              id,
+              revision: value.ref.revision,
+              resource: record.value.resource.ref as unknown as Json,
+            },
+            digest({ kind, id, revision: value.ref.revision }),
+          );
+          return value as unknown as Json;
+        },
+      );
+    }) as Promise<unknown> as Promise<Consent | RightsGrant>;
   }
   async evaluate(
     c: Context,
@@ -266,6 +278,7 @@ export class PermissionRegistry {
     );
   }
   async #offer(tx: UnitOfWork, c: Context, id: string) {
+    nonempty(id, "Offer id", 200);
     const row = await tx.get<ConsentOffer>(
       "consent-offer",
       key("consent-offer", id),
@@ -292,13 +305,6 @@ export class PermissionRegistry {
     input = structuredClone(input);
     assertContext(c);
     this.#manager(c);
-    validateOfferInput(input, c.now);
-    // Reuse domain term validation; this proposed value is never stored as consent.
-    createConsent(c, {
-      ...input.terms,
-      id: input.id,
-      subjectId: input.subjectId,
-    });
     invariant(
       Object.hasOwn(this.#policy.participantActors, input.subjectId),
       "participant_unbound",
@@ -314,6 +320,13 @@ export class PermissionRegistry {
           input,
         }),
         async () => {
+          validateOfferInput(input, c.now);
+          // Reuse domain term validation; this proposed value is never stored as consent.
+          createConsent(c, {
+            ...input.terms,
+            id: input.id,
+            subjectId: input.subjectId,
+          });
           const resource = await this.#resource(
             tx,
             c,
@@ -410,6 +423,27 @@ export class PermissionRegistry {
       "participant_required",
       "Authenticated participant access is required",
     );
+    nonempty(input.offerId, "Offer id", 200);
+    assertDigest(input.reviewDigest);
+    invariant(
+      Number.isSafeInteger(input.expectedRevision) &&
+        input.expectedRevision > 0,
+      "invalid_revision",
+      "A viewed positive offer revision is required",
+    );
+    invariant(
+      Object.keys(input).length === 5 &&
+        [
+          "offerId",
+          "expectedRevision",
+          "reviewDigest",
+          "response",
+          "acknowledged",
+        ].every((k) => Object.hasOwn(input, k)) &&
+        typeof input.acknowledged === "boolean",
+      "invalid_response",
+      "Exact response fields and an explicit boolean acknowledgement are required",
+    );
     invariant(
       input.response === "accept" || input.response === "decline",
       "invalid_response",
@@ -420,8 +454,10 @@ export class PermissionRegistry {
       "acknowledgement_required",
       "Acceptance requires explicit acknowledgement of the exact disclosure and terms",
     );
-    return scoped(this.#db, c, (tx) =>
-      tx.idempotent(
+    return scoped(this.#db, c, async (tx) => {
+      // Recheck present participant authority even when returning a cached response.
+      await this.#offer(tx, c, input.offerId);
+      return tx.idempotent(
         commandId,
         json({
           operation: "respond-consent-offer",
@@ -496,8 +532,8 @@ export class PermissionRegistry {
           );
           return json(next);
         },
-      ),
-    ) as Promise<unknown> as Promise<ConsentOffer>;
+      );
+    }) as Promise<unknown> as Promise<ConsentOffer>;
   }
   async cancelOffer(
     c: Context,
