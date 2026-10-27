@@ -12,7 +12,7 @@ The registry adapter consumes a pinned Evidence persistence SDK in a dedicated p
 
 A scope-bound deployment policy identifies human permission managers and participant-to-subject identity bindings. Participants can consent/withdraw only for their bound subjects and cannot grant rights. Resource editions and bytes are fixed; existing consent requirements cannot be removed from later editions. Derived-resource lineage restrictions must be supplied by the trusted resource registration gateway. Permission evidence still needs real verification; storage does not prove ownership or valid legal consent.
 
-Real PGlite tests apply the pinned SDK migration and use a restricted login, with manager/participant authority, withdrawal, replay, scope and rollback cases. This does not claim real network-session contention or live deployment acceptance. Production must provision a separate migration role and restricted login, and protect identity/participant mappings.
+Real PGlite tests apply the pinned SDK migration and use a restricted login, with manager/participant authority, withdrawal, replay, scope and rollback cases. Embedded tests do not establish real network-session contention or live deployment acceptance; the separate disposable network suite is described below. Production must provision a separate migration role and restricted login, and protect identity/participant mappings.
 
 ## Participant offer workflow
 
@@ -21,3 +21,7 @@ Real PGlite tests apply the pinned SDK migration and use a restricted login, wit
 ## Participant HTTP adapter
 
 The opt-in [private participant handler](PARTICIPANT_HTTP.md) adds host-authenticated session, exact offer review, response and own-consent withdrawal routes over the accepted durable registry. It restricts Origin/Fetch Metadata, binds writes to session CSRF and bounds authentication/body admission. It does not provide login, send invitations, expose manager commands or authorize release. An actual host and participant UI still require qualification.
+
+## Serialized current permission decisions
+
+Permission evaluation acquires the SDK project lock with a checked audit before loading the resource or any permission editions, serializing those reads with withdrawal and other writes. This fixes a reproduced network-session stale-decision race where an evaluation read old consent and only then waited for withdrawal at its final audit. The final decision/hash audit remains. Decisions describe the SQL snapshot and caller-supplied trusted time; they are not future action permits or atomic fences across external consumers. [PostgreSQL tests](POSTGRES_TESTS.md) distinguish actual disposable-session evidence from host identity/time, rights verification and production qualification.
