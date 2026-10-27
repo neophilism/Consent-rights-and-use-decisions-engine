@@ -1,5 +1,5 @@
 {
-  "stage": "local_fix_ci_pending",
+  "stage": "local_and_disposable_postgres_passed_final_head_required",
   "ordinaryTestsPassed": 31,
   "networkGroupsAuthored": 6,
   "regression": {
@@ -15,7 +15,14 @@
     "src/contracts.ts": "d86141cb7546a723f837a298e4ea6fef62692918f78f5aab2d72d6639987fcc5",
     "integration/postgres-permissions.test.ts": "841b85ffaa454aa636750d70301f07660ee2a5104f8e25f7f11417003f839640"
   },
-  "correctedNetworkExecution": "pending",
+  "correctedNetworkExecution": {
+    "source": "12137bb50a11764a442bb6dea9a84038e28df8fd",
+    "run": 40584914929,
+    "job": 122473701396,
+    "passed": 6,
+    "failed": 0,
+    "logsInspected": true
+  },
   "installedPublicPackage": "16 registry/participant restricted-migration groups passed through freshly packed installed compiled exports",
   "finalHeadCi": "required_before_merge",
   "productionIdentityRightsTimeTlsDeployment": "unqualified",

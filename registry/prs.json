@@ -4,7 +4,7 @@
   "roadmapVersion": 1,
   "planVerified": true,
   "plannedPrCount": 6,
-  "observedAt": "2026-10-27T21:12:28Z",
+  "observedAt": "2026-10-27T21:14:22Z",
   "units": [
     {
       "id": "CRU-001",
@@ -60,7 +60,7 @@
         "Persistent permission registry and supersession"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "Durable permission/participant foundations with PR5 current-read serialization fix: checked audit acquires project lock BEFORE all evaluation reads. Real unchanged-runtime regression CI40584349719/job122471750816 reproduced stale allowed=true after committed consent withdrawal; corrected-source six-scenario CI remains required. No atomic downstream action fence or production rights/identity qualification."
+      "implementationStatus": "Durable permission/participant foundations with PR5 current-read serialization fix: checked audit acquires project lock BEFORE all evaluation reads. Real unchanged-runtime regression CI40584349719/job122471750816 reproduced stale allowed=true after committed consent withdrawal; all six corrected scenarios passed CI40584914929/job122473701396 on source12137bb50a11764a442bb6dea9a84038e28df8fd; logs inspected. Final-head acceptance remains required. No atomic downstream action fence or production rights/identity qualification."
     },
     {
       "id": "CRU-004",
@@ -85,13 +85,14 @@
       "remainingWork": [
         "Authenticated hosting/session integration and accessible participant UI",
         "Identity verification and informed consent qualification",
-        "Independent network-session concurrency and live acceptance"
+        "Production/network deployment qualification beyond the six disposable PostgreSQL17 scenarios; live acceptance"
       ],
       "implementationEvidence": {
         "pullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/3",
-        "localTests": 30,
+        "localTests": 31,
         "scope": "Stored exact participant offers plus host-authenticated JSON review/respond/own-consent-withdrawal; no listening server, invitation delivery or live participants",
-        "httpPullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/4"
+        "httpPullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/4",
+        "postgresPullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/5"
       }
     },
     {
@@ -129,7 +130,7 @@
         "Integration and reusable release acceptance"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "Partial PR5: six disposable PostgreSQL17 restricted TCP-session scenarios (acceptance/decline/cancel, observed consent and rights withdrawal waits, lost acknowledgement/fresh pool, roles/scopes), one ordinary group with four unsafe fixture rejections. 31 local groups/typecheck/build/registry pass. Actual corrected-source and all final-head CI/installed package evidence are separate; deployment and live release acceptance remain pending. All 16 registry/participant groups pass through freshly packed installed compiled public exports. Intermediate corrected runtime passed the consent lock regression; new rights test identity fixture was corrected from participant to required manager. Six-group final-head acceptance remains required."
+      "implementationStatus": "Partial PR5: six disposable PostgreSQL17 restricted TCP-session scenarios (acceptance/decline/cancel, observed consent and rights withdrawal waits, lost acknowledgement/fresh pool, roles/scopes), one ordinary group with four unsafe fixture rejections. 31 local groups/typecheck/build/registry pass. Actual corrected-source and all final-head CI/installed package evidence are separate; deployment and live release acceptance remain pending. All 16 registry/participant groups pass through freshly packed installed compiled public exports. Intermediate corrected runtime passed the consent lock regression; new rights test identity fixture was corrected from participant to required manager. Six-group final-head acceptance remains required. All six corrected network groups passed CI40584914929/job122473701396 on source12137bb50a11764a442bb6dea9a84038e28df8fd, logs inspected. This is limited disposable PostgreSQL17 evidence, not production/deployment acceptance."
     }
   ],
   "pullRequests": []
