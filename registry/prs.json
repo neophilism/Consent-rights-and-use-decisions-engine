@@ -4,7 +4,7 @@
   "roadmapVersion": 1,
   "planVerified": true,
   "plannedPrCount": 6,
-  "observedAt": "2026-10-27T23:01:14Z",
+  "observedAt": "2026-10-28T10:55:47Z",
   "units": [
     {
       "id": "CRU-001",
@@ -82,9 +82,9 @@
         "Participant consent capture and review"
       ],
       "acceptanceCriteria": "Verify required behavior, rejection paths, source-bound test evidence and private defaults; live acceptance remains separate.",
-      "implementationStatus": "partial_durable_workflow_and_host_authenticated_http_local_integration_passed; Partial PR6 monotonic authentication/body admission and signal closure after three actual restricted-migration blocked-event-loop regressions failed on old main. 34 local tests/typecheck/build/registry and 12 installed public-export HTTP/deadline groups pass; final-head CI required; existing API/order/SQL uncertainty preserved.",
+      "implementationStatus": "partial_durable_workflow_http_and_explicit_participant_client; nine new local handler/registry/stream groups and typecheck pass; full CI/installed export acceptance pending. Client is not a hosted UI or identity proof.",
       "remainingWork": [
-        "Authenticated hosting/session integration and accessible participant UI",
+        "Authenticated hosting/session integration and accessible mounted participant UI; browser/assistive technology qualification; durable private reload/pending recovery",
         "Identity verification and informed consent qualification",
         "Production/network deployment qualification beyond the six disposable PostgreSQL17 scenarios; live acceptance"
       ],
@@ -94,7 +94,8 @@
         "scope": "Stored exact participant offers plus host-authenticated JSON review/respond/own-consent-withdrawal; no listening server, invitation delivery or live participants",
         "httpPullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/4",
         "postgresPullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/5",
-        "httpDeadlinePullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/6"
+        "httpDeadlinePullRequest": "https://github.com/neophilism/Consent-rights-and-use-decisions-engine/pull/6",
+        "participantClient": "docs/PARTICIPANT_CLIENT.md"
       }
     },
     {
