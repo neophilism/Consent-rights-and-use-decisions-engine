@@ -85,6 +85,9 @@ export class ParticipantClient {
     this.#fetch = transport;
     this.#timeout = timeoutMs;
   }
+  get origin(): string {
+    return this.#origin;
+  }
   get pending(): ParticipantPending | null {
     return structuredClone(this.#pending);
   }
@@ -105,11 +108,12 @@ export class ParticipantClient {
       "client_locked",
     );
   }
-  async #exchange(
+  async #exchange<T>(
     path: string,
+    validate: (value: unknown, status: number) => T | Promise<T>,
     payload?: string,
     csrf?: string,
-  ): Promise<{ status: number; value: unknown }> {
+  ): Promise<T> {
     const controller = new AbortController(),
       deadline = performance.now() + this.#timeout;
     this.#controller = controller;
@@ -177,6 +181,7 @@ export class ParticipantClient {
         const part = await reader.read();
         gate();
         if (part.done) break;
+        requireWire(part.value instanceof Uint8Array);
         size += part.value.byteLength;
         if (size > 262144 || ++count > 4096) fail("response_limit");
         chunks.push(new Uint8Array(part.value));
@@ -197,15 +202,22 @@ export class ParticipantClient {
         fail("invalid_response");
       }
       gate();
-      return { status: response.status, value };
+      const result = await validate(value, response.status);
+      gate();
+      return result;
     };
     try {
       return await Promise.race([operation(), interrupted]);
     } catch (e) {
       throw e instanceof ParticipantClientError &&
-        ["outcome_unknown", "invalid_response", "response_limit"].includes(
-          e.code,
-        )
+        [
+          "outcome_unknown",
+          "invalid_response",
+          "response_limit",
+          "session_unavailable",
+          "review_unavailable",
+          "request_rejected",
+        ].includes(e.code)
         ? new ParticipantClientError(e.code)
         : new ParticipantClientError("outcome_unknown");
     } finally {
@@ -218,22 +230,19 @@ export class ParticipantClient {
     }
   }
   async #session(): Promise<string> {
-    const response = await this.#exchange("/participant/session");
+    const s = await this.#exchange("/participant/session", (value, status) => {
+      requireWire(status === 200, "session_unavailable");
+      const s = exact(value, ["csrfToken", "actorId", "tenantId", "projectId"]);
+      requireWire(
+        identifier(s.actorId) &&
+          s.tenantId === this.#scope.tenantId &&
+          s.projectId === this.#scope.projectId &&
+          typeof s.csrfToken === "string" &&
+          /^[A-Za-z0-9_-]{32,256}$/.test(s.csrfToken),
+      );
+      return { actorId: s.actorId, csrfToken: s.csrfToken };
+    });
     requireWire(!this.#closed, "client_closed");
-    requireWire(response.status === 200, "session_unavailable");
-    const s = exact(response.value, [
-      "csrfToken",
-      "actorId",
-      "tenantId",
-      "projectId",
-    ]);
-    requireWire(
-      identifier(s.actorId) &&
-        s.tenantId === this.#scope.tenantId &&
-        s.projectId === this.#scope.projectId &&
-        typeof s.csrfToken === "string" &&
-        /^[A-Za-z0-9_-]{32,256}$/.test(s.csrfToken),
-    );
     if (this.#actor !== null && this.#actor !== s.actorId) {
       this.dispose();
       fail("identity_changed");
@@ -248,11 +257,13 @@ export class ParticipantClient {
     this.#review = null;
     try {
       await this.#session();
-      const r = await this.#exchange(
+      const review = await this.#exchange(
         "/participant/offer?offerId=" + encodeURIComponent(offerId),
+        (value, status) => {
+          requireWire(status === 200, "review_unavailable");
+          return checkedReview(this.#scope, offerId, value);
+        },
       );
-      requireWire(r.status === 200, "review_unavailable");
-      const review = await checkedReview(this.#scope, offerId, r.value);
       requireWire(!this.#closed, "client_closed");
       this.#review = structuredClone(review);
       return structuredClone(review);
@@ -269,54 +280,56 @@ export class ParticipantClient {
     // Install immutable replay state BEFORE transport can see a mutation.
     this.#pending = structuredClone(pending);
     this.#pendingReview = structuredClone(viewed);
-    const r = await this.#exchange(
+    const result = await this.#exchange<ParticipantResult>(
       "/participant/" + pending.operation,
+      async (value, httpStatus) => {
+        requireWire(
+          httpStatus === 200,
+          httpStatus >= 400 && httpStatus < 500
+            ? "request_rejected"
+            : "outcome_unknown",
+        );
+        let result: ParticipantResult;
+        if (pending.operation === "respond") {
+          const offer = await checkedOffer(this.#scope, value),
+            before = viewed.offer;
+          const { ref, status, resolvedAt, resolvedBy, consent, ...unchanged } =
+            offer;
+          const {
+            ref: oldRef,
+            status: oldStatus,
+            resolvedAt: oldAt,
+            resolvedBy: oldBy,
+            consent: oldConsent,
+            ...original
+          } = before;
+          requireWire(
+            canonical(unchanged) === canonical(original) &&
+              ref.revision === before.ref.revision + 1 &&
+              ref.id === before.ref.id &&
+              resolvedBy === this.#actor &&
+              status ===
+                (pending.command.input.response === "accept"
+                  ? "accepted"
+                  : "declined"),
+          );
+          result = { operation: "respond", offer };
+        } else {
+          const consent = checkedConsent(this.#scope, value),
+            before = viewed.consent!;
+          requireWire(
+            consent.ref.revision === before.ref.revision + 1 &&
+              consent.withdrawnAt !== null &&
+              canonical({ ...consent, ref: before.ref, withdrawnAt: null }) ===
+                canonical(before),
+          );
+          result = { operation: "withdraw", consent };
+        }
+        return result;
+      },
       JSON.stringify(pending.command),
       csrf,
     );
-    requireWire(!this.#closed, "client_closed");
-    requireWire(
-      r.status === 200,
-      r.status >= 400 && r.status < 500
-        ? "request_rejected"
-        : "outcome_unknown",
-    );
-    let result: ParticipantResult;
-    if (pending.operation === "respond") {
-      const offer = await checkedOffer(this.#scope, r.value),
-        before = viewed.offer;
-      const { ref, status, resolvedAt, resolvedBy, consent, ...unchanged } =
-        offer;
-      const {
-        ref: oldRef,
-        status: oldStatus,
-        resolvedAt: oldAt,
-        resolvedBy: oldBy,
-        consent: oldConsent,
-        ...original
-      } = before;
-      requireWire(
-        canonical(unchanged) === canonical(original) &&
-          ref.revision === before.ref.revision + 1 &&
-          ref.id === before.ref.id &&
-          resolvedBy === this.#actor &&
-          status ===
-            (pending.command.input.response === "accept"
-              ? "accepted"
-              : "declined"),
-      );
-      result = { operation: "respond", offer };
-    } else {
-      const consent = checkedConsent(this.#scope, r.value),
-        before = viewed.consent!;
-      requireWire(
-        consent.ref.revision === before.ref.revision + 1 &&
-          consent.withdrawnAt !== null &&
-          canonical({ ...consent, ref: before.ref, withdrawnAt: null }) ===
-            canonical(before),
-      );
-      result = { operation: "withdraw", consent };
-    }
     requireWire(!this.#closed, "client_closed");
     this.#pending = null;
     this.#pendingReview = null;

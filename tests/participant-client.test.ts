@@ -574,3 +574,92 @@ test("configuration, explicit decision, busy gates and captured configuration re
   assert.equal(client.pending, null);
   assert.equal(canonical(review.offer.terms), canonical(input.terms));
 });
+
+test("profile hashing stays within exchange cancellation/deadline; late validation cannot unlock pending", async () => {
+  const review = await syntheticReview();
+  const originalDigest = crypto.subtle.digest.bind(crypto.subtle);
+  let slow = false,
+    finish: (() => void) | undefined;
+  crypto.subtle.digest = async (...args) => {
+    if (slow)
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    return originalDigest(...args);
+  };
+  try {
+    const declined = {
+      ...review.offer,
+      ref: { ...review.offer.ref, revision: 2 },
+      status: "declined",
+      resolvedAt: participant.now,
+      resolvedBy: participant.actor.id,
+    };
+    const client = new ParticipantClient(
+      origin,
+      scope,
+      async (url, init) =>
+        String(url).endsWith("/session")
+          ? session()
+          : init?.method === "POST"
+            ? json(declined)
+            : json(review),
+      100,
+    );
+    slow = true;
+    await assert.rejects(client.review("offer"), isCode("outcome_unknown"));
+    assert.equal(client.pending, null);
+    finish!();
+    await new Promise((r) => setImmediate(r));
+    slow = false;
+    await assert.rejects(
+      client.respond("unviewed", { response: "accept", acknowledged: true }),
+      isCode("review_required"),
+    );
+    await client.review("offer");
+    // Acceptance verification hashes deterministic consent and the captured consent content.
+    const consentRef = {
+      ...scope,
+      kind: "consent",
+      id: digest({ profile: "offer-consent-v1", offer: review.offer.ref }),
+      revision: 1,
+    };
+    const consent = {
+      ...review.offer.terms,
+      ref: consentRef,
+      subjectId: review.offer.subjectId,
+      withdrawnAt: null,
+      recordedBy: participant.actor.id,
+    };
+    const accepted = {
+      ...declined,
+      status: "accepted",
+      consent: { ref: consentRef, digest: digest(consent) },
+    };
+    const validating = new ParticipantClient(
+      origin,
+      scope,
+      async (url, init) =>
+        String(url).endsWith("/session")
+          ? session()
+          : init?.method === "POST"
+            ? json(accepted)
+            : json(review),
+      100,
+    );
+    await validating.review("offer");
+    slow = true;
+    await assert.rejects(
+      validating.respond("stable", { response: "accept", acknowledged: true }),
+      isCode("outcome_unknown"),
+    );
+    const retained = validating.pending;
+    finish!();
+    slow = false;
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(validating.pending, retained);
+    assert.ok(retained);
+  } finally {
+    crypto.subtle.digest = originalDigest;
+  }
+});

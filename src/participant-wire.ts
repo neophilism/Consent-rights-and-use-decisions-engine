@@ -182,6 +182,8 @@ export async function checkedOffer(
     );
     timestamp(o.resolvedAt);
     requireWire(Date.parse(o.resolvedAt) >= Date.parse(o.createdAt));
+    if (o.status !== "cancelled")
+      requireWire(Date.parse(o.resolvedAt) < Date.parse(o.responseExpiresAt));
     if (o.status === "accepted") {
       binding(scope, o.consent, "consent");
       const originalRef = { ...r, revision: 1 };
@@ -249,6 +251,8 @@ export async function checkedReview(
   );
   if (offer.status === "accepted") {
     const c = checkedConsent(scope, r.consent);
+    if (c.withdrawnAt !== null)
+      requireWire(Date.parse(c.withdrawnAt) >= Date.parse(offer.resolvedAt!));
     requireWire(
       canonical({ ...c, ref: { ...c.ref, revision: 1 }, withdrawnAt: null }) ===
         canonical({

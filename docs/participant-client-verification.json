@@ -1,0 +1,44 @@
+{
+  "observedAt": "2026-10-28T11:00:22Z",
+  "scope": "CRU-004 private participant client only",
+  "local": {
+    "ordinaryTests": 44,
+    "newClientGroups": 10,
+    "actualHandlerRestrictedMigrationGroups": 5,
+    "syntheticFetchStreamHashGroups": 5,
+    "typecheck": "passed",
+    "build": "passed",
+    "registry": "passed"
+  },
+  "installed": {
+    "clientGroups": 10,
+    "entry": "@accountability/consent-rights/participant-client",
+    "compiledClientAndWire": "byte-matched build"
+  },
+  "initialCi": {
+    "source": "6a32e7518b11e86f40d816a95e180060e7f502b4",
+    "run": 40676077189,
+    "check": 122774705810,
+    "postgres": 122774706329,
+    "ordinaryTests": 43,
+    "existingPostgresGroups": 6,
+    "logsInspected": true
+  },
+  "review": [
+    "Captured internal exact review and immutable pending command before POST; fresh CSRF and actor/scope binding on each explicit write/replay",
+    "Scoped exact profile, deterministic original consent capture hash and immutable terms; historical replay after current withdrawal does not revive consent",
+    "Strict UTF8/bytes/chunks/media/no-store/redirect checks, monotonic gates including asynchronous hash validation, signal closure, sanitized callback diagnostics",
+    "Closed/disposed/busy/pending fences, detached returned input, current server mapping denial, no automatic writes/new-ID recovery"
+  ],
+  "limitations": [
+    "No real browser/assistive technology or listening host/login/session/TLS/Identity qualification",
+    "Memory-only pending; host must dispose on identity/purpose/policy changes and retain blocked intent",
+    "No atomic cross-request session/action or distributed permission fence; digest consistency is not identity/informed consent proof",
+    "No new PostgreSQL network scenario or live participants/communications"
+  ],
+  "sourceSha256": {
+    "src/participant-client.ts": "de2e153af545dae731c5c9b8860967d0dcc117a8306dcf1fb44dedcb3c01b5bd",
+    "src/participant-wire.ts": "872fcbd02fce7de186998174573a37e5a36fd4138488110e8668863350c3e4ed",
+    "tests/participant-client.test.ts": "d03d1c4904871dee6cad304e57457baaebe457b4ed9c22d9a2acf443579e6f62"
+  }
+}
